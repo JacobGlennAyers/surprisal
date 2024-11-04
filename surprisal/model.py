@@ -185,6 +185,7 @@ class HuggingFaceModel(Model):
         self, textbatch: typing.Union[typing.List, str]
     ) -> typing.List[HuggingFaceSurprisal]:
         raise NotImplementedError
+    
 
     def extract_surprisal(
         self,
@@ -283,7 +284,10 @@ class CausalHuggingFaceModel(HuggingFaceModel):
         # we don't want the pad token to shift the probability distribution,
         # so we set its weight to -inf
         logits[:, :, self.tokenizer.pad_token_id] = -float("inf")
+        softmax = torch.softmax(logits, dim=2)
         logsoftmax = torch.log_softmax(logits, dim=2)
+        entropies = -1 * softmax * logsoftmax
+        entropies = torch.sum(entropies, dim=2)
 
         # for CausalLMs, we pick one before the current word to get surprisal of the current word in
         # context of the previous word. otherwise we would be reading off the surprisal of current
@@ -296,11 +300,31 @@ class CausalHuggingFaceModel(HuggingFaceModel):
             )
             .squeeze(2)
         )
+
+        probs = (
+            softmax[:, :-1, :]
+            .gather(
+                2,
+                tokenized.input_ids[:, not use_bos_token :].unsqueeze(2),
+            )
+            .squeeze(2)
+        )
+
         if not use_bos_token:
             # padding to the left with a NULL because we removed the BOS token
             logprobs = torch.concat(
                 ((torch.ones(b, 1) * torch.nan).to(self.device), logprobs), dim=1
             )
+
+            probs = torch.concat(
+                ((torch.ones(b, 1) * torch.nan).to(self.device), probs), dim=1
+            )
+            
+            entropies = torch.concat(
+                ((torch.ones(b, 1) * torch.nan).to(self.device), entropies), dim=1
+            )
+
+        weighted_log_probs = probs*logprobs
 
         # b stands for an individual item in the batch; each sentence is one item
         # since this is an autoregressive model
@@ -310,6 +334,8 @@ class CausalHuggingFaceModel(HuggingFaceModel):
                 HuggingFaceSurprisal(
                     tokens=tokenized[b],
                     surprisals=-logprobs[b, :].cpu().float().numpy(),
+                    weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy(),
+                    entropies=entropies[b, :].cpu().float().numpy(),
                 )
             ]
         return accumulator
