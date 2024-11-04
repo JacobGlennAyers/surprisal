@@ -35,11 +35,15 @@ class HuggingFaceSurprisal(SurprisalArray):
         self,
         tokens: "Encoding",
         surprisals: np.ndarray,
+        weighted_surprisals : np.ndarray,
+        entropies : np.array,
     ) -> None:
         super().__init__()
 
         self._tokens: "Encoding" = tokens
         self._surprisals = surprisals.astype(SurprisalQuantity)
+        self._weighted_surprisals = weighted_surprisals.astype(SurprisalQuantity)
+        self._entropies = entropies.astype(SurprisalQuantity)
 
     @property
     def tokens(self):
@@ -48,9 +52,17 @@ class HuggingFaceSurprisal(SurprisalArray):
     @property
     def surprisals(self) -> np.typing.NDArray[SurprisalQuantity]:
         return self._surprisals
+    
+    @property
+    def weighted_surprisals(self) -> np.typing.NDArray[SurprisalQuantity]:
+        return self._weighted_surprisals
+
+    @property
+    def entropies(self) -> np.typing.NDArray[SurprisalQuantity]:
+        return self._entropies
 
     def __iter__(self) -> typing.Tuple[str, float]:
-        return zip(self.tokens, self.surprisals)
+        return zip(self.tokens, self.surprisals, self.weighted_surprisals, self.entropies)
 
     def __getitem__(
         self, slctup: typing.Tuple[typing.Union[slice, int], str]
@@ -83,8 +95,14 @@ class HuggingFaceSurprisal(SurprisalArray):
             slc = slice(slc, slc + 1)
 
         token_slc = fn(self._tokens, slc)
+        aggregated_surprisal = self.surprisals[token_slc].sum()
+        aggregated_weighted_surprisal = self.weighted_surprisals[token_slc].sum()
+        aggregated_entropy = self.entropies[token_slc].sum()
+
         return SurprisalQuantity(
-            self.surprisals[token_slc].sum(), " ".join(self.tokens[token_slc])
+            SurprisalQuantity(aggregated_surprisal, " ".join(self.tokens[token_slc])),
+            SurprisalQuantity(aggregated_weighted_surprisal, " ".join(self.tokens[token_slc])),
+            SurprisalQuantity(aggregated_entropy, " ".join(self.tokens[token_slc])),
         )
 
 
