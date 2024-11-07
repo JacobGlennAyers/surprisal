@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 
 import surprisal
 
-g = surprisal.AutoHuggingFaceModel.from_pretrained(model_id="gpt2")
+g = surprisal.AutoHuggingFaceModel.from_pretrained(model_id_or_path="gpt2")
 # b = surprisal.AutoHuggingFaceModel.from_pretrained(model_id="bert-base-uncased")
 
 
@@ -20,7 +20,7 @@ stims = [
     # "How likely is a spicy burrito?",
 ]
 
-surps = [*g.surprise(stims), *g.surprise(stims, use_bos_token=False)]
+surps = [*g.surprise(stims)]#, *g.surprise(stims, use_bos_token=False)]
 
 
 f, a = plt.subplots()
@@ -28,7 +28,7 @@ f, a = plt.subplots()
 for surp in surps:
     print(surp)
 
-    surp.lineplot(
+    surp.surprisal_lineplot(
         f,
         a,
         # cumulative=True
@@ -37,12 +37,54 @@ for surp in surps:
 
 plt.show()
 
-*_, surp = surps
-print(f"tokens: {surp}")
+f, a = plt.subplots()
 
-for wslc in [0, 1, slice(0, 1)]:
-    print(f"span of interest (word index): {wslc}")
-    print(f"recovered surprisal: {surp[wslc, 'word']}")
-    print("=" * 32)
+for surp in surps:
+    print(surp)
 
-pass
+    surp.weighted_surprisal_lineplot(
+        f,
+        a,
+        # cumulative=True
+    )
+    # break
+
+plt.show()
+
+f, a = plt.subplots()
+
+for surp in surps:
+    print(surp)
+
+    surp.entropy_lineplot(
+        f,
+        a,
+        # cumulative=True
+    )
+    # break
+
+plt.show()
+
+f, a = plt.subplots()
+
+for surp in surps:
+    surp.compare_surprisal_entropy_lineplot(
+        f,
+        a,
+        # cumulative=True  # Enable if you want cumulative values
+    )
+
+plt.show()
+
+
+
+
+#*_, surp = surps
+#print(f"tokens: {surp}")
+
+#for wslc in [0, 1, slice(0, 1)]:
+#    print(f"span of interest (word index): {wslc}")
+#    print(f"recovered surprisal: {surp[wslc, 'word']}")
+#    print("=" * 32)
+
+#pass

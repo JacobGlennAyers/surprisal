@@ -212,7 +212,7 @@ class CausalHuggingFaceModel(HuggingFaceModel):
     """
     Subclass to handle causal (autoregressive) language models from huggingface
     """
-
+    print("HERE")
     def __init__(self, model_id=None, **kwargs) -> None:
         if "model_class" not in kwargs:
             kwargs.update(dict(model_class=AutoModelForCausalLM))
@@ -330,14 +330,148 @@ class CausalHuggingFaceModel(HuggingFaceModel):
         # since this is an autoregressive model
         accumulator = []
         for b in range(logprobs.shape[0]):
+            tokens=tokenized[b]
+            surprisals=-logprobs[b, :].cpu().float().numpy()
+            weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy()
+            entropies = entropies[b, :].cpu().float().numpy()
+            print(len(tokens), surprisals.shape, weighted_surprisals.shape, entropies.shape)
+            
             accumulator += [
                 HuggingFaceSurprisal(
-                    tokens=tokenized[b],
-                    surprisals=-logprobs[b, :].cpu().float().numpy(),
-                    weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy(),
-                    entropies=entropies[b, :].cpu().float().numpy(),
+                    tokens,
+                    surprisals,
+                    weighted_surprisals,
+                    entropies,
                 )
+                
             ]
+            
+        
+        return accumulator
+
+class CausalHuggingFaceModel(HuggingFaceModel):
+    """
+    Subclass to handle causal (autoregressive) language models from huggingface
+    """
+
+    def __init__(self, model_id=None, **kwargs) -> None:
+        if "model_class" not in kwargs:
+            kwargs.update(dict(model_class=AutoModelForCausalLM))
+        super().__init__(model_id, **kwargs)
+        self.tokenizer.padding_side = "right"
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+    def surprise(
+        self,
+        textbatch: typing.Union[typing.List, str],
+        use_bos_token=True,
+    ) -> typing.List[HuggingFaceSurprisal]:
+        """provides a measure of surprisal for `textbatch`"""
+
+        import torch  # pylint: disable=import-outside-toplevel
+
+        tokenized = self.tokenize(textbatch)
+
+        if use_bos_token:
+            ids = torch.concat(
+                (
+                    torch.tensor([self.tokenizer.bos_token_id])
+                    .view(1, -1)
+                    .repeat(tokenized.input_ids.shape[0], 1),
+                    tokenized.input_ids,
+                ),
+                dim=1,
+            )
+            mask = torch.concat(
+                (
+                    torch.tensor([1])
+                    .view(1, -1)
+                    .repeat(tokenized.input_ids.shape[0], 1),
+                    tokenized.attention_mask,
+                ),
+                dim=1,
+            )
+        else:
+            ids = tokenized.input_ids
+            mask = tokenized.attention_mask
+
+        ids = ids.to(self.device)
+        mask = mask.to(self.device)
+
+        with torch.no_grad():
+            output = self.model(
+                input_ids=ids,
+                attention_mask=mask,
+                return_dict=True,
+            )
+        tokenized = tokenized.to(self.device)
+
+        # Calculate logits and apply softmax and log_softmax
+        logits = output["logits"]
+        b, n, V = logits.shape
+        # Ensure pad_token_mask matches the shape of entropies and other tensors in sequence length
+        pad_token_mask = (tokenized.input_ids[:, int(not use_bos_token):-1] != self.tokenizer.pad_token_id).to(self.device)
+
+
+        softmax = torch.softmax(logits, dim=2)
+        logsoftmax = torch.log_softmax(logits, dim=2)
+
+        
+        # Calculate surprisal by gathering log probability of the ground truth next token
+        logprobs = (
+            logsoftmax[:, :-1, :]
+            .gather(
+                2,
+                tokenized.input_ids[:, int(not use_bos_token):].unsqueeze(2),
+            )
+            .squeeze(2)
+        )
+
+        logprobs_all = logsoftmax[:, :-1, :]
+
+        # Extract probabilities for ground truth tokens
+        probs = (
+            softmax[:, :-1, :]
+            .gather(
+                2,
+                tokenized.input_ids[:, int(not use_bos_token):].unsqueeze(2),
+            )
+            .squeeze(2)
+        )
+        probs_all = softmax[:, :-1, :]
+        probs_all = torch.clamp(probs_all, min=1e-9)
+
+        entropies = -torch.sum( logprobs_all * probs_all, dim=2)
+        #print(entropies, pad_token_mask.float())
+        #entropies = entropies * pad_token_mask.float()
+        # Add padding for BOS token if not used
+        if not use_bos_token:
+            nan_padding = torch.ones(b, 1, device=self.device) * float("nan")
+            logprobs = torch.concat((nan_padding, logprobs), dim=1)
+            probs = torch.concat((nan_padding, probs), dim=1)
+            entropies = torch.concat((nan_padding, entropies), dim=1)
+            #entropy_per_token = torch.concat((nan_padding, entropy_per_token), dim=1)
+
+        # Calculate weighted surprisal and convert to numpy for accumulation
+        weighted_log_probs = probs * logprobs
+
+        accumulator = []
+        for b in range(logprobs.shape[0]):
+            tokens = tokenized[b]
+            surprisals = -logprobs[b, :].cpu().float().numpy()
+            weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy()
+            entropies = entropies[b, :].cpu().float().numpy()
+            print(len(tokens), surprisals.shape, weighted_surprisals.shape, entropies.shape)
+
+            accumulator.append(
+                HuggingFaceSurprisal(
+                    tokens,
+                    surprisals,
+                    weighted_surprisals,
+                    entropies,
+                )
+            )
+            
         return accumulator
 
 
