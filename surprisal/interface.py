@@ -110,6 +110,33 @@ class SurprisalArray(ABC):
         """
         raise NotImplementedError
 
+    def lineplot(self, f=None, a=None, cumulative=False, metric="surprisal"):
+        """
+        Plots the surprisal/entropy values in this object as a line plot.
+
+        Args:
+            f (`matplotlib.figure.Figure`, optional): An existing Figure object.
+                Created if none is provided. Defaults to None.
+            a (`matplotlib.axes.Axes`, optional): An existing Axes instance corresponding to `f`.
+                If none provided, a new instance is created. Defaults to None.
+            cumulative (bool, optional): Should values be summed as we go? Defaults to False.
+            metric (str, optional): The type of plot to produce: "surprisal", "entropy", or "compare".
+                Defaults to "surprisal".
+
+        Returns:
+            typing.Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]: the instances of the
+                figure and axes used to plot the lineplot
+        """
+        assert metric in {"surprisal", "entropy", "compare"}, "Invalid metric."
+
+        if metric == "surprisal":
+            f, a = self.surprisal_lineplot(f=f, a=a, cumulative=cumulative)
+        elif metric == "entropy":
+            f, a = self.entropy_lineplot(f=f, a=a, cumulative=cumulative)
+        elif metric == "compare":
+            f, a = self.compare_surprisal_entropy_lineplot(f=f, a=a, cumulative=cumulative)
+
+        return f, a
 
 
     
@@ -150,7 +177,7 @@ class SurprisalArray(ABC):
         a.set_xticklabels(self.tokens, rotation=45, ha="right", fontsize=9)  # Rotate labels if needed
         a.set(
             xlabel="Tokens",
-            ylabel=f"{'Cumulative ' if cumulative else ''}Values (natural log scale)"
+            ylabel=f"{'Cumulative ' if cumulative else ''}Surprisal (natural log scale)"
         )
         # plt.legend(bbox_to_anchor=(0, -0.1), loc="upper left")
         plt.tight_layout()
@@ -158,52 +185,6 @@ class SurprisalArray(ABC):
 
         return f, a
     
-    def weighted_surprisal_lineplot(self, f=None, a=None, cumulative=False):
-        """
-        Plots the surprisal values in this object as a line plot
-
-        Args:
-            f (`matplotlib.figure.Figure`, optional): An existing Figure object.
-                Created if none is provided. Defaults to None.
-            a (`matplotlib.axes.Axes`, optional): An existing Axes instance corresponding to `f`.
-                If none provided, a new instance is created. Defaults to None.
-            cumulative (bool, optional): Should surprisal be summed as we go? Defaults to False.
-
-        Returns:
-            typing.Tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]: the instances of the
-                figure and axes used to plot the lineplot
-        """
-        # import plotext as plt
-        from matplotlib import pyplot as plt  # pylint: disable=import-outside-toplevel
-        import numpy as np  # pylint: disable=import-outside-toplevel
-
-        if f is None or a is None:
-            f, a = plt.subplots()
-        arr = None
-
-
-        arr = np.cumsum(self.weighted_surprisals) if cumulative else self.weighted_surprisals
-        a.plot(
-            arr + np.random.rand(len(self)) / 10,
-            ".--",
-            lw=2,
-            label=" ".join(self.tokens),
-            alpha=0.9,
-        )
-        a.set_xticks(range(len(self.tokens)))
-        a.set_xticklabels(self.tokens, rotation=45, ha="right", fontsize=9)  # Rotate labels if needed
-        a.set(
-            xlabel="Tokens",
-            ylabel=f"{'Cumulative ' if cumulative else ''}Values (natural log scale)"
-        )
-        # plt.legend(bbox_to_anchor=(0, -0.1), loc="upper left")
-        plt.tight_layout()
-        a.grid(visible=True)
-
-        #for i, (t, y, x, z) in enumerate(self):
-        #    a.annotate(t, (i, arr[i]))
-
-        return f, a
     
     def entropy_lineplot(self, f=None, a=None, cumulative=False):
         """
@@ -228,7 +209,6 @@ class SurprisalArray(ABC):
             f, a = plt.subplots()
 
         arr = np.cumsum(self.entropies) if cumulative else self.entropies
-        print(arr)
         a.plot(
             arr + np.random.rand(len(self)) / 10,
             ".--",
@@ -240,7 +220,7 @@ class SurprisalArray(ABC):
         a.set_xticklabels(self.tokens, rotation=45, ha="right", fontsize=9)  # Rotate labels if needed
         a.set(
             xlabel="Tokens",
-            ylabel=f"{'Cumulative ' if cumulative else ''}Values (natural log scale)"
+            ylabel=f"{'Cumulative ' if cumulative else ''}Entropy (natural log scale)"
         )
         # plt.legend(bbox_to_anchor=(0, -0.1), loc="upper left")
         plt.tight_layout()
@@ -300,20 +280,11 @@ class SurprisalArray(ABC):
             xlabel="Tokens",
             ylabel=f"{'Cumulative ' if cumulative else ''}Values (natural log scale)"
         )
-        # Configure plot
-        #a.set(
-        #    xticks=range(0, len(self.tokens)),
-        #    xlabel="Tokens",
-        #    ylabel=f"{'Cumulative ' if cumulative else ''}Values (natural log scale)"
-        #)
+
         plt.legend()
         plt.tight_layout()
         a.grid(visible=True)
 
-        # Annotate each point with the corresponding token
-        #for i, token in enumerate(self.tokens):
-        #    a.annotate(token, (i, surprisal_arr[i]), color="blue")
-        #    a.annotate(token, (i, entropy_arr[i]), color="red")
 
         return f, a
 

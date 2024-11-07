@@ -212,7 +212,6 @@ class CausalHuggingFaceModel(HuggingFaceModel):
     """
     Subclass to handle causal (autoregressive) language models from huggingface
     """
-    print("HERE")
     def __init__(self, model_id=None, **kwargs) -> None:
         if "model_class" not in kwargs:
             kwargs.update(dict(model_class=AutoModelForCausalLM))
@@ -334,7 +333,6 @@ class CausalHuggingFaceModel(HuggingFaceModel):
             surprisals=-logprobs[b, :].cpu().float().numpy()
             weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy()
             entropies = entropies[b, :].cpu().float().numpy()
-            print(len(tokens), surprisals.shape, weighted_surprisals.shape, entropies.shape)
             
             accumulator += [
                 HuggingFaceSurprisal(
@@ -461,7 +459,6 @@ class CausalHuggingFaceModel(HuggingFaceModel):
             surprisals = -logprobs[b, :].cpu().float().numpy()
             weighted_surprisals = -weighted_log_probs[b, :].cpu().float().numpy()
             entropies = entropies[b, :].cpu().float().numpy()
-            print(len(tokens), surprisals.shape, weighted_surprisals.shape, entropies.shape)
 
             accumulator.append(
                 HuggingFaceSurprisal(
